@@ -1,0 +1,81 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+ORIGIN_VERSION = ENV['ORIGIN_VERSION'] || "v1.2.0-rc2-642f0af"
+
+# The private network IP of the VM. You will use this IP to connect to OpenShift.
+PUBLIC_ADDRESS="10.1.2.4"
+
+# Number of virtualized CPUs
+VM_CPU = ENV['VM_CPU'] || 2
+
+# Amount of available RAM
+VM_MEMORY = ENV['VM_MEMORY'] || 3072
+
+# Origin home folder
+OO_HOME = "/home/vagrant/origin"
+
+Vagrant.configure(2) do |config|
+  config.vm.box = "centos/7"
+
+  config.vm.provider "virtualbox" do |v, override|
+    v.memory = VM_MEMORY
+    v.cpus   = VM_CPU
+    v.customize ["modifyvm", :id, "--ioapic", "on"]
+    v.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+  end
+
+
+  config.vm.network "private_network", ip: "#{PUBLIC_ADDRESS}"
+  config.vm.synced_folder ".", "/vagrant_data"
+
+#  if ENV.has_key?('SUB_USERNAME') && ENV.has_key?('SUB_PASSWORD')
+#    config.registration.username = ENV['SUB_USERNAME']
+#    config.registration.password = ENV['SUB_PASSWORD']
+#  end
+
+  # config.servicemanager.services = "docker"
+
+  # install docker
+  config.vm.provision "shell", inline: <<-SHELL
+    sudo yum -y install docker
+    sudo systemctl enable docker 2>&1
+    sudo systemctl start docker
+  SHELL
+
+
+
+  # install openshift
+  config.vm.provision "shell", inline: <<-SHELL
+    mkdir -p #{OO_HOME}
+    curl -L -o #{OO_HOME}/openshift-origin-server.tar.gz https://github.com/openshift/origin/releases/download/v1.2.0-rc2/openshift-origin-server-#{ORIGIN_VERSION}-linux-64bit.tar.gz
+    cd #{OO_HOME} && tar xvfz openshift-origin-server.tar.gz && rm openshift-origin-server.tar.gz
+    echo "PATH=$PATH:#{OO_HOME}/openshift-origin-server-#{ORIGIN_VERSION}-linux-64bit" >> /home/vagrant/.bash_profile
+
+
+    sudo cat <<-'EOF' > /etc/systemd/system/openshift.service
+[Unit]
+Description=OpenShift Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=#{OO_HOME}/openshift-origin-server-#{ORIGIN_VERSION}-linux-64bit/openshift start
+ExecStop=#{OO_HOME}/openshift-origin-server-#{ORIGIN_VERSION}-linux-64bit/openshift stop
+PIDFile=/var/run/openshift.pid
+Restart=on-abort
+
+[Install]
+WantedBy=default.target
+EOF
+
+    sudo chmod 664 /etc/systemd/system/openshift.service
+  SHELL
+
+  # start openshift service
+  config.vm.provision "shell", inline: <<-SHELL
+    sudo systemctl enable openshift 2>&1
+    sudo systemctl start openshift
+  SHELL
+end
