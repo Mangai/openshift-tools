@@ -48,7 +48,8 @@ Vagrant.configure(2) do |config|
   # install openshift
   config.vm.provision "shell", inline: <<-SHELL
     mkdir -p #{OO_HOME}
-    curl -L -o #{OO_HOME}/openshift-origin-server.tar.gz https://github.com/openshift/origin/releases/download/v1.2.0-rc2/openshift-origin-server-#{ORIGIN_VERSION}-linux-64bit.tar.gz
+    OV=`echo "#{ORIGIN_VERSION}" | sed "s/\(.*\)-[a-z0-9]*$/\1/"`
+    curl -fsSL -o #{OO_HOME}/openshift-origin-server.tar.gz https://github.com/openshift/origin/releases/download/$OV/openshift-origin-server-#{ORIGIN_VERSION}-linux-64bit.tar.gz
     cd #{OO_HOME} && tar xvfz openshift-origin-server.tar.gz && rm openshift-origin-server.tar.gz
     echo "PATH=$PATH:#{OO_HOME}/openshift-origin-server-#{ORIGIN_VERSION}-linux-64bit" >> /home/vagrant/.bash_profile
 
